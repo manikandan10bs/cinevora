@@ -1,0 +1,196 @@
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-background: 220 15% 7%;
+  --color-foreground: 0 0% 98%;
+  --color-card: 220 15% 12%;
+  --color-card-foreground: 0 0% 98%;
+  --color-popover: 220 15% 12%;
+  --color-popover-foreground: 0 0% 98%;
+  --color-primary: 160 80% 45%;
+  --color-primary-foreground: 0 0% 100%;
+  --color-secondary: 160 60% 30%;
+  --color-secondary-foreground: 0 0% 100%;
+  --color-tertiary: 210 20% 20%;
+  --color-tertiary-foreground: 0 0% 96%;
+  --color-accent: 190 90% 45%;
+  --color-accent-foreground: 0 0% 100%;
+  --color-border: 220 10% 30%;
+  --color-input: 220 15% 15%;
+  --color-ring: 160 80% 50%;
+  --color-muted: 220 10% 20%;
+  --color-muted-foreground: 220 10% 80%;
+  --color-success: 145 65% 45%;
+  --color-success-foreground: 0 0% 100%;
+  --color-warning: 40 90% 50%;
+  --color-warning-foreground: 0 0% 100%;
+  --color-error: 0 80% 55%;
+  --color-error-foreground: 0 0% 100%;
+  --color-info: 200 90% 60%;
+  --color-info-foreground: 0 0% 100%;
+  --color-surface: 220 15% 10%;
+  --color-surface-foreground: 0 0% 98%;
+  --color-gray-50: 220 15% 96%;
+  --color-gray-100: 220 10% 90%;
+  --color-gray-200: 220 10% 80%;
+  --color-gray-300: 220 10% 65%;
+  --color-gray-400: 220 10% 55%;
+  --color-gray-500: 220 10% 45%;
+  --color-gray-600: 220 10% 35%;
+  --color-gray-700: 220 10% 25%;
+  --color-gray-800: 220 10% 15%;
+  --color-gray-900: 220 10% 10%;
+  --font-sans: "DM Sans", sans-serif;
+  --font-body: "Inter", sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+  --gradient-primary: linear-gradient(
+    135deg,
+    hsl(160 80% 45%) 0%,
+    hsl(190 90% 50%) 100%
+  );
+  --gradient-secondary: linear-gradient(
+    135deg,
+    hsl(160 60% 30%) 0%,
+    hsl(210 40% 30%) 100%
+  );
+  --gradient-accent: linear-gradient(
+    135deg,
+    hsl(190 90% 55%) 0%,
+    hsl(160 80% 45%) 100%
+  );
+  --gradient-hero-overlay: linear-gradient(
+    180deg,
+    hsl(220 15% 5% / 0.15) 0%,
+    hsl(220 15% 5% / 0.45) 40%,
+    hsl(220 15% 5% / 0.92) 100%
+  );
+}
+
+@layer base {
+  html {
+    color: hsl(var(--color-foreground));
+    background-color: hsl(var(--color-background));
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-body);
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    color: hsl(var(--color-foreground));
+    font-family: var(--font-sans);
+  }
+
+  p,
+  span,
+  div,
+  a,
+  li,
+  label,
+  small,
+  strong {
+    color: inherit;
+  }
+
+  a {
+    @apply text-foreground;
+  }
+
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  [role="button"]:focus-visible {
+    outline: 2px solid hsl(var(--color-ring));
+    outline-offset: 2px;
+  }
+}
+
+@layer utilities {
+  .cinematic-border {
+    border: 1px solid hsl(var(--color-border));
+  }
+
+  .cinematic-glow {
+    box-shadow: 0 0 0 1px hsl(var(--color-accent) / 0.3);
+  }
+
+  .poster-overlay {
+    background: linear-gradient(
+      180deg,
+      hsl(var(--color-background) / 0) 0%,
+      hsl(var(--color-background) / 0.85) 100%
+    );
+  }
+
+  .skeleton-shimmer {
+    background-image: linear-gradient(
+      60deg,
+      hsl(var(--color-gray-800)) 25%,
+      hsl(var(--color-gray-700)) 50%,
+      hsl(var(--color-gray-800)) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.8s linear infinite;
+  }
+
+  .scroll-snap-x {
+    scroll-snap-type: x mandatory;
+  }
+
+  .scroll-snap-start {
+    scroll-snap-align: start;
+  }
+
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .bg-hero-overlay {
+    background: var(--gradient-hero-overlay);
+  }
+
+  .text-gradient-primary {
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .card-glow:hover {
+    box-shadow: 0 0 0 1px hsl(var(--color-primary) / 0.4), 0 8px 32px hsl(var(--color-primary) / 0.12);
+  }
+}
+
+@layer base {
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .animate-fade-in-up {
+    animation: fadeInUp 0.4s ease both;
+  }
+}

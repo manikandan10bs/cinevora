@@ -1,0 +1,180 @@
+{
+  "session": {
+    "id": "SESSION-20260420-1430",
+    "date": "2026-04-20",
+    "startedAt": "14:30 WIB",
+    "endedAt": null,
+    "status": "ACTIVE",
+    "agent": "openai-codex"
+  },
+  "project": {
+    "name": "storefront-admin",
+    "root": "D:\\Github\\storefront-admin",
+    "gitRemote": "https://github.com/example/storefront-admin.git",
+    "gitBranch": "main"
+  },
+  "prompt": {
+    "original": "Add a CSV export button to the orders table. It should respect the active filters and show a loading state while exporting.",
+    "understoodGoal": "Add a filtered CSV export flow to the existing orders table with honest loading and failure states.",
+    "assumptions": [
+      {
+        "assumption": "The orders table already has a filter state object in the page component.",
+        "reason": "The existing table renders filtered rows and the export should reuse that source of truth."
+      },
+      {
+        "assumption": "The export can be implemented as a frontend-triggered request to an existing API route.",
+        "reason": "No backend schema change was requested and the app already exposes order list data."
+      }
+    ],
+    "outOfScope": [
+      "Changing the order table layout beyond adding the export action.",
+      "Adding scheduled or background exports."
+    ],
+    "blockers": []
+  },
+  "plan": [
+    {
+      "step": 1,
+      "title": "Audit orders table and filter state",
+      "description": "Find the table component, filter state owner, and existing data loading pattern.",
+      "status": "completed",
+      "startedAt": "14:31 WIB",
+      "completedAt": "14:36 WIB"
+    },
+    {
+      "step": 2,
+      "title": "Add export API call",
+      "description": "Create a small client helper that sends active filters to the export endpoint and downloads the returned CSV.",
+      "status": "completed",
+      "startedAt": "14:36 WIB",
+      "completedAt": "14:48 WIB"
+    },
+    {
+      "step": 3,
+      "title": "Wire export button into toolbar",
+      "description": "Add an export button that uses the existing toolbar styling and shows loading and error states.",
+      "status": "in_progress",
+      "startedAt": "14:48 WIB",
+      "completedAt": null
+    },
+    {
+      "step": 4,
+      "title": "Verify filtered export behavior",
+      "description": "Run tests if available and manually trace export with no filters, one filter, and empty results.",
+      "status": "pending",
+      "startedAt": null,
+      "completedAt": null
+    }
+  ],
+  "log": [
+    {
+      "time": "14:31",
+      "step": 1,
+      "title": "Audit orders table and filter state",
+      "status": "completed",
+      "what": "Inspected the orders page, table toolbar, and data-fetching hook.",
+      "files": [
+        {
+          "path": "src/features/orders/OrdersPage.tsx",
+          "change": "Read only; confirmed this component owns filter state."
+        },
+        {
+          "path": "src/features/orders/OrdersToolbar.tsx",
+          "change": "Read only; confirmed toolbar already has secondary action styling."
+        }
+      ],
+      "result": "Export belongs in the existing toolbar and should use the same filter state passed to the table query.",
+      "notes": "No layout redesign needed. Keep the action visually secondary."
+    },
+    {
+      "time": "14:36",
+      "step": 2,
+      "title": "Add export API call",
+      "status": "completed",
+      "what": "Added a client helper that posts current filters to the export endpoint and downloads the CSV blob.",
+      "files": [
+        {
+          "path": "src/features/orders/exportOrdersCsv.ts",
+          "change": "Created helper for filtered CSV export and filename handling."
+        }
+      ],
+      "result": "The export helper is ready to be called from the toolbar.",
+      "notes": "The helper does not log filter payloads because filters can include private customer data."
+    },
+    {
+      "time": "14:48",
+      "step": 3,
+      "title": "Wire export button into toolbar",
+      "status": "in_progress",
+      "what": "Started adding the export button to OrdersToolbar and passing active filters from OrdersPage.",
+      "files": [
+        {
+          "path": "src/features/orders/OrdersToolbar.tsx",
+          "change": "In progress; export button shell added but error state is not wired yet."
+        },
+        {
+          "path": "src/features/orders/OrdersPage.tsx",
+          "change": "In progress; active filters are being passed into the toolbar."
+        }
+      ],
+      "result": "Toolbar integration is mid-flight. Do not run final verification until loading and error states are finished.",
+      "notes": "Use the existing secondary button treatment. Do not introduce a new button variant."
+    }
+  ],
+  "lastPosition": {
+    "time": "14:52",
+    "lastAction": "Added the export button shell and started passing active filters into OrdersToolbar.",
+    "lastStepStatus": "in_progress",
+    "nextStep": "Finish OrdersToolbar loading and error handling, then verify the export helper receives the current filter state.",
+    "lastFileTouched": "src/features/orders/OrdersToolbar.tsx",
+    "systemCondition": "mid-flight - toolbar export button is partially wired and should not be considered complete.",
+    "criticalContext": [
+      "Do not redesign the orders toolbar.",
+      "Do not log raw filter payloads because they may contain private customer data.",
+      "The export action should stay secondary, not become the primary page CTA."
+    ]
+  },
+  "blockers": [],
+  "decisions": [
+    {
+      "time": "14:34",
+      "decision": "Reuse the existing orders filter state instead of creating separate export state.",
+      "reason": "A separate state source could drift from the visible table results."
+    },
+    {
+      "time": "14:39",
+      "decision": "Download the CSV blob on the client rather than navigating to the export URL.",
+      "reason": "The UI needs an honest loading state and can show failure feedback without leaving the page."
+    }
+  ],
+  "summary": {
+    "completed": [
+      "Audited the orders table and toolbar.",
+      "Added the filtered CSV export helper."
+    ],
+    "incomplete": [
+      "Finish toolbar loading and error states.",
+      "Verify filtered export behavior."
+    ],
+    "filesChanged": [
+      {
+        "path": "src/features/orders/exportOrdersCsv.ts",
+        "change": "Created export helper."
+      },
+      {
+        "path": "src/features/orders/OrdersToolbar.tsx",
+        "change": "Partially added export button."
+      },
+      {
+        "path": "src/features/orders/OrdersPage.tsx",
+        "change": "Partially passed active filters to toolbar."
+      }
+    ],
+    "verification": [],
+    "nextSessionMustKnow": [
+      "Resume at Step 3.",
+      "Audit the current working tree before continuing because the interrupted file may have changed.",
+      "Do not commit runtime .runbook/sessions/SESSION-[timestamp].json files unless explicitly requested."
+    ]
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "ranking_metrics": {
+    "popularity": {
+      "precision@10": 0.0847732181425486,
+      "recall@10": 0.06954722382622618,
+      "ndcg@10": 0.10035700808953038,
+      "users_evaluated": 926
+    },
+    "content": {
+      "precision@10": 0.022462203023758103,
+      "recall@10": 0.02101740474239763,
+      "ndcg@10": 0.028153026769665208,
+      "users_evaluated": 926
+    },
+    "collaborative": {
+      "precision@10": 0.1545356371490281,
+      "recall@10": 0.1399767863022904,
+      "ndcg@10": 0.2027148898247685,
+      "users_evaluated": 926
+    },
+    "hybrid": {
+      "precision@10": 0.11544276457883369,
+      "recall@10": 0.09705314701353338,
+      "ndcg@10": 0.14810328287858732,
+      "users_evaluated": 926
+    }
+  },
+  "rating_prediction_rmse": {
+    "rmse_global_baseline": 1.1255,
+    "rmse_movie_mean_baseline": 1.0231,
+    "rmse_collaborative_svd": 0.9885
+  },
+  "evaluation_config": {
+    "test_fraction": 0.2,
+    "random_seed": 42,
+    "relevance_threshold": 4.0,
+    "top_k": 10,
+    "hybrid_weights": {
+      "collaborative": 0.5,
+      "content": 0.35,
+      "popularity": 0.15
+    }
+  }
+}

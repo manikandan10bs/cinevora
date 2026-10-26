@@ -1,0 +1,14 @@
+Original rows: 3562
+Cleaned rows: 3560
+Rows removed: 2
+Movies with poster URLs: 3560
+Movies with trailer URLs: 1181
+
+Movies by industry:
+industry
+Bollywood    780
+Tamil        699
+Telugu       650
+Malayalam    642
+Hollywood    503
+Kannada      286
