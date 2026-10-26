@@ -249,6 +249,21 @@ app.add_middleware(MonitoringMiddleware)
 # -----------------------------------------------------------------------------
 # System Health & Status Endpoints
 # -----------------------------------------------------------------------------
+@app.get("/", tags=["System"])
+async def root():
+    """Welcome endpoint providing health status and interactive API documentation links."""
+    return {
+        "service": "Cinevora API",
+        "description": "Real-Time Movie Recommendation Service with Knowledge Graph RAG & MLOps Monitoring",
+        "status": "healthy",
+        "version": "2.0.0",
+        "master_catalog_titles": 3560,
+        "ai_model": "gemini-3.5-flash-lite",
+        "documentation": "/docs",
+        "health_check": "/health"
+    }
+
+
 @app.get("/health", response_model=HealthResponse, tags=["System"])
 async def health_check():
     """Returns operational status of Cinevora and its components."""
