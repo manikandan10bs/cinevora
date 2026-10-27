@@ -28,12 +28,13 @@ export const HomePage = ({ myList, onToggleList }: HomePageProps) => {
   );
 
   const [featured, setFeatured] = useState<ContentItem[]>([]);
-  const [recommended, setRecommended] = useState<ContentItem[]>([]);
-  const [trending, setTrending] = useState<ContentItem[]>([]);
-  const [indianCinema, setIndianCinema] = useState<ContentItem[]>([]);
-  const [hollywood, setHollywood] = useState<ContentItem[]>([]);
-  const [topRated, setTopRated] = useState<ContentItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [recommended, setRecommended] = useState<ContentItem[]>(fallbackRecs);
+  const [trending, setTrending] = useState<ContentItem[]>(trendingNow);
+  const [indianCinema, setIndianCinema] = useState<ContentItem[]>(moviesCollection);
+  const [hollywood, setHollywood] = useState<ContentItem[]>(trendingNow);
+  const [topRated, setTopRated] = useState<ContentItem[]>(topTenToday);
+  const [loading, setLoading] = useState(false);
+  const [isBackendConnecting, setIsBackendConnecting] = useState(false);
 
   // Trailer modal state
   const [selectedTrailerMovie, setSelectedTrailerMovie] = useState<ContentItem | null>(null);
@@ -42,33 +43,39 @@ export const HomePage = ({ myList, onToggleList }: HomePageProps) => {
 
   useEffect(() => {
     let isMounted = true;
-    async function loadData() {
-      try {
-        setLoading(true);
-        const [feat, recs, trend, ind, hw, top] = await Promise.all([
-          cinevoraApi.getFeaturedMovies(),
-          cinevoraApi.getRecommendations(activeUser, "all", 10),
-          cinevoraApi.searchMovies("", { limit: 10 }),
-          cinevoraApi.searchMovies("", { cinema_region: "Indian", limit: 10 }),
-          cinevoraApi.searchMovies("", { cinema_region: "Hollywood", limit: 10 }),
-          cinevoraApi.getMasterCatalog({ sort_by: "rating", page_size: 10 }),
-        ]);
 
-        if (isMounted) {
-          if (feat.length > 0) setFeatured(feat);
-          setRecommended(recs.length > 0 ? recs : fallbackRecs);
-          setTrending(trend.length > 0 ? trend : trendingNow);
-          setIndianCinema(ind.length > 0 ? ind : moviesCollection);
-          setHollywood(hw.length > 0 ? hw : trendingNow);
-          setTopRated(top.items.length > 0 ? top.items : topTenToday);
-        }
-      } catch (err) {
-        console.warn("Failed to fetch Cinevora homepage data:", err);
-      } finally {
-        if (isMounted) setLoading(false);
-      }
-    }
-    loadData();
+    // Check health / wake-up status
+    cinevoraApi.getHealth().then(() => {
+      if (isMounted) setIsBackendConnecting(false);
+    }).catch(() => {
+      if (isMounted) setIsBackendConnecting(true);
+    });
+
+    // Load each section independently so slow endpoints don't block the page
+    cinevoraApi.getFeaturedMovies().then((feat) => {
+      if (isMounted && feat.length > 0) setFeatured(feat);
+    }).catch((err) => console.warn("Featured movies fallback:", err));
+
+    cinevoraApi.getRecommendations(activeUser, "all", 10).then((recs) => {
+      if (isMounted && recs.length > 0) setRecommended(recs);
+    }).catch((err) => console.warn("Recommendations fallback:", err));
+
+    cinevoraApi.searchMovies("", { limit: 10 }).then((trend) => {
+      if (isMounted && trend.length > 0) setTrending(trend);
+    }).catch((err) => console.warn("Trending fallback:", err));
+
+    cinevoraApi.searchMovies("", { cinema_region: "Indian", limit: 10 }).then((ind) => {
+      if (isMounted && ind.length > 0) setIndianCinema(ind);
+    }).catch((err) => console.warn("Indian cinema fallback:", err));
+
+    cinevoraApi.searchMovies("", { cinema_region: "Hollywood", limit: 10 }).then((hw) => {
+      if (isMounted && hw.length > 0) setHollywood(hw);
+    }).catch((err) => console.warn("Hollywood fallback:", err));
+
+    cinevoraApi.getMasterCatalog({ sort_by: "rating", page_size: 10 }).then((top) => {
+      if (isMounted && top.items.length > 0) setTopRated(top.items);
+    }).catch((err) => console.warn("Master catalog fallback:", err));
+
     return () => {
       isMounted = false;
     };
@@ -84,6 +91,15 @@ export const HomePage = ({ myList, onToggleList }: HomePageProps) => {
       <HeroBanner items={featured} onPlayTrailer={handlePlayTrailer} />
 
       <PageContainer className="py-8 md:py-12 space-y-6">
+        {isBackendConnecting && (
+          <div className="flex items-center gap-3 rounded-xl border border-primary/30 bg-primary/10 px-4 py-2.5 text-xs text-primary backdrop-blur-sm animate-pulse">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+            </span>
+            <span>Connecting to Cinevora live cloud backend on Render (waking from sleep mode)...</span>
+          </div>
+        )}
         {/* Recommended For You (Personalized from SQLite Interactions) */}
         <ContentCarousel
           title="✨ Recommended For You"

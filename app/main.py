@@ -250,11 +250,11 @@ if cors_origins_env:
         if cleaned and cleaned not in allowed_origins:
             allowed_origins.append(cleaned)
 
-# Enable CORS for frontend, Firebase Hosting domains, Vercel, and local browser communication
+# Enable CORS for frontend, Firebase Hosting domains, Vercel, LAN IP, and local browser communication
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_origin_regex=r"^https:\/\/.*\.web\.app$|^https:\/\/.*\.firebaseapp\.com$|^https:\/\/.*\.vercel\.app$|^https:\/\/.*\.onrender\.com$",
+    allow_origin_regex=r".*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
