@@ -5,6 +5,10 @@
 !.env.example
 !frontend_ui/.env.production
 
+# Firebase
+.firebase/
+frontend_ui/.firebase/
+
 # Node & Frontend
 node_modules/
 dist/
