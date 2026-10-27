@@ -29,6 +29,7 @@ class Settings:
     # Server Configuration
     HOST: str = os.getenv("APP_HOST", "127.0.0.1")
     PORT: int = int(os.getenv("APP_PORT", "8000"))
+    CORS_ORIGINS: str = os.getenv("CORS_ORIGINS", "")
 
     # Google Gemini Configuration
     # Official cost-effective Flash model: 'gemini-3.5-flash-lite'
