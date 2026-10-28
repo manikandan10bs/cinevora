@@ -282,7 +282,14 @@ async def root(request: Request):
     accept = request.headers.get("accept", "")
     if "text/html" in accept and frontend_index.exists():
         from starlette.responses import FileResponse
-        return FileResponse(frontend_index)
+        return FileResponse(
+            frontend_index,
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0"
+            }
+        )
 
     return {
         "service": "Cinevora API",
@@ -1477,7 +1484,14 @@ if frontend_dist.exists() and (frontend_dist / "index.html").exists():
         if full_path and candidate.exists() and candidate.is_file():
             return FileResponse(candidate)
 
-        return FileResponse(frontend_dist / "index.html")
+        return FileResponse(
+            frontend_dist / "index.html",
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0"
+            }
+        )
 
 
 if __name__ == "__main__":
