@@ -119,6 +119,7 @@ class HealthResponse(BaseModel):
     catalog_movies_count: int = Field(..., description="Number of movies in catalog")
     gemini_configured: bool = Field(..., description="Whether Gemini API key is configured")
     tmdb_configured: bool = Field(False, description="Whether TMDB API key is configured")
+    watchmode_configured: bool = Field(False, description="Whether WatchMode API key is configured")
     enriched_catalog_count: Optional[int] = Field(None, description="Count of combined Indian + Hollywood catalog")
     master_catalog_count: Optional[int] = Field(None, description="Count of titles in master cleaned dataset")
 
@@ -337,5 +338,38 @@ class TrailerResolutionResponse(BaseModel):
     trailer_url: Optional[str] = None
     source: str = "catalog"
     attempts_made: int = 1
-    max_attempts: int = 3
+    max_attempts: int = 1
+
+
+class StreamingSourceItem(BaseModel):
+    """Streaming provider source information from WatchMode."""
+    source_id: Optional[int] = None
+    name: str
+    type: str = "sub"
+    region: str = "US"
+    format: str = "HD"
+    price: Optional[float] = None
+    web_url: str
+
+
+class MovieStreamingResponse(BaseModel):
+    """Available streaming providers for a movie."""
+    movie_id: str
+    title: str
+    has_streaming: bool = False
+    sources: List[StreamingSourceItem] = []
+
+
+class StreamingAvailableMovieItem(BaseModel):
+    """Movie with active streaming links for the Available for Streaming carousel."""
+    movie_id: str
+    title: str
+    release_year: Optional[str] = None
+    genres: Optional[str] = None
+    poster_url: Optional[str] = None
+    backdrop_url: Optional[str] = None
+    rating: Optional[float] = None
+    trailer_url: Optional[str] = None
+    streaming_sources: List[StreamingSourceItem] = []
+
 

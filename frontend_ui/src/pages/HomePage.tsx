@@ -10,10 +10,11 @@ import { HeroBanner } from "@/components/content/HeroBanner";
 import { ContentCarousel } from "@/components/content/ContentCarousel";
 import { PosterCard } from "@/components/content/PosterCard";
 import { TopRankCard } from "@/components/content/TopRankCard";
+import { StreamingCard } from "@/components/content/StreamingCard";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { TrailerModal } from "@/components/common/TrailerModal";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
-import { cinevoraApi, getActiveUserId } from "@/lib/cinevoraClient";
+import { cinevoraApi, getActiveUserId, StreamingMovie } from "@/lib/cinevoraClient";
 
 type HomePageProps = {
   myList: string[];
@@ -29,6 +30,7 @@ export const HomePage = ({ myList, onToggleList }: HomePageProps) => {
 
   const [featured, setFeatured] = useState<ContentItem[]>([]);
   const [recommended, setRecommended] = useState<ContentItem[]>(fallbackRecs);
+  const [streamingMovies, setStreamingMovies] = useState<StreamingMovie[]>([]);
   const [trending, setTrending] = useState<ContentItem[]>(trendingNow);
   const [indianCinema, setIndianCinema] = useState<ContentItem[]>(moviesCollection);
   const [hollywood, setHollywood] = useState<ContentItem[]>(trendingNow);
@@ -59,6 +61,11 @@ export const HomePage = ({ myList, onToggleList }: HomePageProps) => {
     cinevoraApi.getRecommendations(activeUser, "all", 10).then((recs) => {
       if (isMounted && recs.length > 0) setRecommended(recs);
     }).catch((err) => console.warn("Recommendations fallback:", err));
+
+    // WatchMode Streaming Movies
+    cinevoraApi.getAvailableStreamingMovies().then((streams) => {
+      if (isMounted && streams.length > 0) setStreamingMovies(streams);
+    }).catch((err) => console.warn("Streaming movies fallback:", err));
 
     cinevoraApi.searchMovies("", { limit: 10 }).then((trend) => {
       if (isMounted && trend.length > 0) setTrending(trend);
@@ -100,10 +107,10 @@ export const HomePage = ({ myList, onToggleList }: HomePageProps) => {
             <span>Connecting to Cinevora live cloud backend on Render (waking from sleep mode)...</span>
           </div>
         )}
-        {/* Recommended For You (Personalized from SQLite Interactions) */}
+        {/* Recommended For You based on you liked and saved */}
         <ContentCarousel
-          title="✨ Recommended For You"
-          subtitle="Real-time personalized picks tailored to your viewing and likes profile."
+          title="✨ Recommended For You based on you liked and saved"
+          subtitle="Real-time personalized cinema picks tailored to your saves and liked titles."
         >
           {recommended.map((item, index) => (
             <div
@@ -120,6 +127,27 @@ export const HomePage = ({ myList, onToggleList }: HomePageProps) => {
             </div>
           ))}
         </ContentCarousel>
+
+        {/* Available for Streaming (WatchMode API Integration) */}
+        {streamingMovies.length > 0 && (
+          <ContentCarousel
+            title="📺 Available for Streaming"
+            subtitle="Stream right now on Netflix, Prime Video, Disney+, Apple TV & more via WatchMode."
+          >
+            {streamingMovies.map((item, index) => (
+              <div
+                key={`stream-${item.movie_id}-${index}`}
+                className="w-[160px] shrink-0 md:w-[200px]"
+                style={{ scrollSnapAlign: "start" }}
+              >
+                <StreamingCard
+                  item={item}
+                  onPlayTrailer={handlePlayTrailer}
+                />
+              </div>
+            ))}
+          </ContentCarousel>
+        )}
 
         {/* Top 10 Rated Masterpieces */}
         <ContentCarousel

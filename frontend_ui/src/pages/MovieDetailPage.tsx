@@ -9,6 +9,8 @@ import {
   Heart,
   ArrowLeft,
   Sparkle,
+  Television,
+  ArrowSquareOut,
 } from "@phosphor-icons/react";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { ContentItem, contentItems } from "@/data/mockContent";
@@ -18,7 +20,7 @@ import { CastGrid } from "@/components/details/CastGrid";
 import { PosterCard } from "@/components/content/PosterCard";
 import { TrailerModal } from "@/components/common/TrailerModal";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
-import { cinevoraApi, getActiveUserId } from "@/lib/cinevoraClient";
+import { cinevoraApi, getActiveUserId, StreamingSource } from "@/lib/cinevoraClient";
 import { toast } from "@/hooks/use-toast";
 
 type MovieDetailPageProps = {
@@ -32,6 +34,7 @@ export const MovieDetailPage = ({ myList, onToggleList }: MovieDetailPageProps) 
 
   const [movie, setMovie] = useState<ContentItem | null>(null);
   const [relatedMovies, setRelatedMovies] = useState<ContentItem[]>([]);
+  const [streamingSources, setStreamingSources] = useState<StreamingSource[]>([]);
   const [trailerOpen, setTrailerOpen] = useState(false);
   const [liked, setLiked] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -48,6 +51,13 @@ export const MovieDetailPage = ({ myList, onToggleList }: MovieDetailPageProps) 
       if (!slug) return;
       try {
         setLoading(true);
+
+        // Fetch streaming availability via WatchMode
+        cinevoraApi.getMovieStreamingSources(slug).then((res) => {
+          if (isMounted && res?.sources?.length > 0) {
+            setStreamingSources(res.sources);
+          }
+        }).catch(() => {});
 
         // 1. Fetch movie details from FastAPI backend
         let item = await cinevoraApi.getMovieDetails(slug);
@@ -237,6 +247,28 @@ export const MovieDetailPage = ({ myList, onToggleList }: MovieDetailPageProps) 
                   {liked ? "Liked" : "Like"}
                 </button>
               </div>
+
+              {/* Streaming Providers via WatchMode */}
+              {streamingSources.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2 pt-2">
+                  <span className="text-xs font-semibold text-emerald-400 flex items-center gap-1.5 mr-1">
+                    <Television size={15} weight="bold" />
+                    Available on:
+                  </span>
+                  {streamingSources.slice(0, 5).map((src, idx) => (
+                    <a
+                      key={`${src.name}-${idx}`}
+                      href={src.web_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card/90 px-3 py-1.5 text-xs font-semibold text-foreground hover:border-primary hover:text-primary transition-all shadow-sm"
+                    >
+                      <ArrowSquareOut size={13} weight="bold" />
+                      {src.name}
+                    </a>
+                  ))}
+                </div>
+              )}
             </div>
           </motion.div>
         </PageContainer>

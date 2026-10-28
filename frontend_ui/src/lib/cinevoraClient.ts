@@ -6,6 +6,28 @@
 
 import { ContentItem, CastMember } from "@/data/mockContent";
 
+export type StreamingSource = {
+  source_id?: number;
+  name: string;
+  type: string;
+  region?: string;
+  format?: string;
+  price?: number | null;
+  web_url: string;
+};
+
+export type StreamingMovie = {
+  movie_id: string;
+  title: string;
+  release_year?: string;
+  genres?: string;
+  poster_url?: string;
+  backdrop_url?: string;
+  rating?: number;
+  trailer_url?: string;
+  streaming_sources: StreamingSource[];
+};
+
 export const API_BASE_URL =
   (import.meta as any).env?.VITE_API_BASE_URL ||
   ((import.meta as any).env?.PROD
@@ -502,7 +524,7 @@ export const cinevoraApi = {
   },
 
   /**
-   * Resolves exact YouTube trailer video URL using Google Gemini for missing/search query links.
+   * Resolves exact YouTube trailer: TMDB first -> Master Catalog -> YouTube search query fallback.
    */
   async getExactTrailerUrl(movieId: string): Promise<{
     movie_id: string;
@@ -517,6 +539,37 @@ export const cinevoraApi = {
       throw new Error("Failed to resolve trailer URL");
     }
     return res.json();
+  },
+
+  /**
+   * Fetches movies available for streaming via WatchMode API.
+   */
+  async getAvailableStreamingMovies(): Promise<StreamingMovie[]> {
+    try {
+      const res = await fetch(`${API_BASE_URL}/movies/streaming/available`);
+      if (!res.ok) return [];
+      return res.json();
+    } catch {
+      return [];
+    }
+  },
+
+  /**
+   * Fetches real-time streaming providers (Netflix, Prime, Disney+, etc.) for a specific movie.
+   */
+  async getMovieStreamingSources(movieId: string): Promise<{
+    movie_id: string;
+    title: string;
+    has_streaming: boolean;
+    sources: StreamingSource[];
+  }> {
+    try {
+      const res = await fetch(`${API_BASE_URL}/movies/${encodeURIComponent(movieId)}/streaming`);
+      if (!res.ok) return { movie_id: movieId, title: "", has_streaming: false, sources: [] };
+      return res.json();
+    } catch {
+      return { movie_id: movieId, title: "", has_streaming: false, sources: [] };
+    }
   },
 
   /**

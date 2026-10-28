@@ -39,6 +39,26 @@ class Settings:
     TMDB_BASE_URL: str = "https://api.themoviedb.org/3"
     TMDB_IMAGE_BASE: str = "https://image.tmdb.org/t/p"
 
+    # WatchMode Streaming API Configuration
+    WATCHMODE_BASE_URL: str = "https://api.watchmode.com/v1"
+
+    @classmethod
+    def get_watchmode_api_key(cls) -> Optional[str]:
+        """
+        Retrieves the WatchMode API key from environment.
+        Returns None or empty string if not configured.
+        """
+        key = os.getenv("WATCHMODE_API_KEY")
+        if key and key.strip():
+            return key.strip()
+        return None
+
+    @classmethod
+    def is_watchmode_configured(cls) -> bool:
+        """Checks if a valid WatchMode API key is configured."""
+        key = cls.get_watchmode_api_key()
+        return bool(key and len(key) >= 16)
+
     @classmethod
     def get_tmdb_api_key(cls) -> Optional[str]:
         """

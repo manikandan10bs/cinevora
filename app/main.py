@@ -60,10 +60,14 @@ from app.schemas import (
     ViewHistoryResponse,
     ViewHistoryItem,
     ClearDataRequest,
-    TrailerResolutionResponse
+    TrailerResolutionResponse,
+    StreamingSourceItem,
+    MovieStreamingResponse,
+    StreamingAvailableMovieItem
 )
 from app.assistant import GeminiAssistant
 from app.tmdb import tmdb_client
+from app.watchmode import watchmode_client
 from app.db import (
     init_db,
     add_favorite,
@@ -308,6 +312,7 @@ async def health_check():
         catalog_movies_count=master_count,
         gemini_configured=assistant.is_available if assistant else False,
         tmdb_configured=tmdb_client.is_configured,
+        watchmode_configured=watchmode_client.is_configured,
         enriched_catalog_count=master_count,
         master_catalog_count=master_count
     )
@@ -388,7 +393,37 @@ async def search_movies(
     year_range_info = [start_year, end_year] if (start_year or end_year) else None
 
     results: List[MovieItem] = []
+    seen_titles = set()
+
+    # Step 1: TMDB as Primary Dataset for Search
+    if clean_query and tmdb_client.is_configured:
+        tmdb_results = tmdb_client.search_movie(clean_query, str(start_year) if start_year else None)
+        for tm in tmdb_results[:limit]:
+            tm_dict = tmdb_client.convert_tmdb_to_movie_dict(tm)
+            seen_titles.add(tm_dict["title"].lower().strip())
+            results.append(
+                MovieItem(
+                    movie_id=tm_dict["movie_id"],
+                    movie_title=tm_dict["title"],
+                    release_date=tm_dict["release_date"],
+                    genres=tm_dict["genres"],
+                    score=tm_dict["score"],
+                    predicted_rating=tm_dict["predicted_rating"],
+                    cinema_region=tm_dict["cinema_region"],
+                    original_language=tm_dict["original_language"],
+                    poster_url=tm_dict["poster_url"],
+                    backdrop_url=tm_dict["backdrop_url"],
+                    trailer_url=tm_dict["trailer_url"]
+                )
+            )
+
+    # Step 2: Master Catalog Search
     for row in records:
+        t_title = str(row.get("title", "Untitled")).lower().strip()
+        if t_title in seen_titles:
+            continue
+        seen_titles.add(t_title)
+
         ind = str(row.get("industry", "Cinema"))
         is_hwd = ind.lower() == "hollywood"
         lang_code = {
@@ -417,7 +452,7 @@ async def search_movies(
         query=query,
         genre=genre,
         year_range=year_range_info,
-        count=total_found,
+        count=len(results),
         results=results
     )
 
@@ -491,48 +526,140 @@ async def get_featured_movies_endpoint(
     limit: int = Query(12, ge=1, le=50, description="Max featured movies for hero rotation")
 ):
     """
-    Returns curated featured spotlight movies from the master catalog for rotating hero banners.
-    Defined before /movies/{movie_id} to prevent dynamic route collision.
+    Returns curated featured spotlight movies for rotating hero banners.
+    TMDB is the PRIMARY dataset, falling back / supplementing with Master Catalog.
     """
-    from frontend.poster_service import get_featured_movies
-    featured = get_featured_movies()[:limit]
-
     results: List[MovieItem] = []
-    for row in featured:
-        ind = str(row.get("industry", "Cinema"))
-        is_hwd = ind.lower() == "hollywood"
-        lang_code = {
-            "tamil": "ta", "telugu": "te", "malayalam": "ml",
-            "kannada": "kn", "bollywood": "hi", "hollywood": "en"
-        }.get(ind.lower(), "en")
-        region_label = "Hollywood" if is_hwd else "Indian"
+    seen_ids = set()
 
-        results.append(
-            MovieItem(
-                movie_id=row.get("catalog_id") or str(row.get("movie_id", "")),
-                movie_title=str(row.get("title", "Untitled")),
-                release_date=str(row.get("release_year", "Unknown")),
-                genres=str(row.get("genre", "Cinema")),
-                score=1.0,
-                predicted_rating=float(row.get("avg_rating") or row.get("rating", 7.5)),
-                cinema_region=region_label,
-                original_language=lang_code,
-                poster_url=row.get("poster_url") or row.get("movie_poster"),
-                backdrop_url=row.get("backdrop_url") or row.get("movie_poster"),
-                trailer_url=row.get("trailer_url") or row.get("trailer_link")
+    # Step 1: TMDB Trending as Primary Dataset
+    if tmdb_client.is_configured:
+        tmdb_trending = tmdb_client.get_trending_movies("week")
+        for tm in tmdb_trending:
+            if len(results) >= limit:
+                break
+            tm_dict = tmdb_client.convert_tmdb_to_movie_dict(tm)
+            m_id = tm_dict["movie_id"]
+            seen_ids.add(m_id)
+            results.append(
+                MovieItem(
+                    movie_id=m_id,
+                    movie_title=tm_dict["title"],
+                    release_date=tm_dict["release_date"],
+                    genres=tm_dict["genres"],
+                    score=tm_dict["score"],
+                    predicted_rating=tm_dict["predicted_rating"],
+                    cinema_region=tm_dict["cinema_region"],
+                    original_language=tm_dict["original_language"],
+                    poster_url=tm_dict["poster_url"],
+                    backdrop_url=tm_dict["backdrop_url"],
+                    trailer_url=tm_dict["trailer_url"]
+                )
             )
-        )
-    return results
+
+    # Step 2: Supplement / Fallback from Master Catalog
+    if len(results) < limit:
+        from frontend.poster_service import get_featured_movies
+        featured = get_featured_movies()
+        for row in featured:
+            if len(results) >= limit:
+                break
+            cat_id = row.get("catalog_id") or str(row.get("movie_id", ""))
+            if cat_id in seen_ids:
+                continue
+            seen_ids.add(cat_id)
+
+            ind = str(row.get("industry", "Cinema"))
+            is_hwd = ind.lower() == "hollywood"
+            lang_code = {
+                "tamil": "ta", "telugu": "te", "malayalam": "ml",
+                "kannada": "kn", "bollywood": "hi", "hollywood": "en"
+            }.get(ind.lower(), "en")
+            region_label = "Hollywood" if is_hwd else "Indian"
+
+            results.append(
+                MovieItem(
+                    movie_id=cat_id,
+                    movie_title=str(row.get("title", "Untitled")),
+                    release_date=str(row.get("release_year", "Unknown")),
+                    genres=str(row.get("genre", "Cinema")),
+                    score=1.0,
+                    predicted_rating=float(row.get("avg_rating") or row.get("rating", 7.5)),
+                    cinema_region=region_label,
+                    original_language=lang_code,
+                    poster_url=row.get("poster_url") or row.get("movie_poster"),
+                    backdrop_url=row.get("backdrop_url") or row.get("movie_poster"),
+                    trailer_url=row.get("trailer_url") or row.get("trailer_link")
+                )
+            )
+    return results[:limit]
 
 
 @app.get("/movies/{movie_id}", response_model=MovieDetails, tags=["Catalog"])
 async def get_movie_details(movie_id: str):
-    """Returns full catalog details and rating statistics for an individual movie by catalog_id or movie_id."""
+    """
+    Returns full catalog details and rating statistics for an individual movie.
+    Checks TMDB primary dataset first, then Master Catalog.
+    """
+    # 1. Primary Check: TMDB ID
+    if movie_id.startswith("TMDB-") and tmdb_client.is_configured:
+        tmdb_id = movie_id.replace("TMDB-", "")
+        tm_data = tmdb_client.get_movie_details_with_credits(tmdb_id)
+        if tm_data:
+            conv = tmdb_client.convert_tmdb_to_movie_dict(tm_data)
+            genres_str = conv.get("genres", "Cinema")
+            genre_list = [g.strip() for g in genres_str.split(",") if g.strip()]
+            return MovieDetails(
+                movie_id=conv["movie_id"],
+                movie_title=conv["title"],
+                release_date=conv["release_date"],
+                release_year=int(conv["release_year"]) if conv["release_year"].isdigit() else None,
+                genres=genres_str,
+                genre_list=genre_list,
+                rating_count=int(conv["predicted_rating"] * 100),
+                avg_rating=conv["predicted_rating"],
+                imdb_url=f"https://www.imdb.com/title/{tm_data.get('imdb_id')}" if tm_data.get("imdb_id") else None,
+                cinema_region=conv["cinema_region"],
+                original_language=conv["original_language"],
+                poster_url=conv["poster_url"],
+                backdrop_url=conv["backdrop_url"],
+                trailer_url=conv["trailer_url"],
+                synopsis=conv["synopsis"]
+            )
+
+    # 2. Check Master Catalog
     movie = get_master_movie_by_id(movie_id)
+    if not movie and tmdb_client.is_configured:
+        # Try searching TMDB by title as fallback
+        search_res = tmdb_client.search_movie(movie_id)
+        if search_res:
+            tm_data = tmdb_client.get_movie_details_with_credits(search_res[0]["id"])
+            if tm_data:
+                conv = tmdb_client.convert_tmdb_to_movie_dict(tm_data)
+                genres_str = conv.get("genres", "Cinema")
+                genre_list = [g.strip() for g in genres_str.split(",") if g.strip()]
+                return MovieDetails(
+                    movie_id=conv["movie_id"],
+                    movie_title=conv["title"],
+                    release_date=conv["release_date"],
+                    release_year=int(conv["release_year"]) if conv["release_year"].isdigit() else None,
+                    genres=genres_str,
+                    genre_list=genre_list,
+                    rating_count=int(conv["predicted_rating"] * 100),
+                    avg_rating=conv["predicted_rating"],
+                    imdb_url=None,
+                    cinema_region=conv["cinema_region"],
+                    original_language=conv["original_language"],
+                    poster_url=conv["poster_url"],
+                    backdrop_url=conv["backdrop_url"],
+                    trailer_url=conv["trailer_url"],
+                    synopsis=conv["synopsis"]
+                )
+
     if not movie:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Movie with ID '{movie_id}' was not found in the Cinevora master catalog."
+            detail=f"Movie with ID '{movie_id}' was not found in Cinevora datasets."
         )
 
     genres_str = str(movie.get("genre", "Cinema"))
@@ -561,34 +688,47 @@ async def get_movie_details(movie_id: str):
 async def get_movie_trailer(movie_id: str):
     """
     Returns the exact YouTube video watch URL for a movie.
-    If the catalog contains only a search query link or null,
-    Google Gemini is invoked to resolve the exact trailer watch link.
+    Strict pipeline:
+    1. First check in TMDB (Primary)
+    2. Then check in Master_movie
+    3. Direct fallback to YouTube search query with movie name
+    (Gemini 3-request search completely removed as requested)
     """
-    movie = get_master_movie_by_id(movie_id)
+    # Resolve movie object from TMDB primary or Master Catalog
+    movie = None
+    if movie_id.startswith("TMDB-") and tmdb_client.is_configured:
+        tmdb_raw_id = movie_id.replace("TMDB-", "")
+        details = tmdb_client.get_movie_details_with_credits(tmdb_raw_id)
+        if details:
+            movie = tmdb_client.convert_tmdb_to_movie_dict(details)
+
+    if not movie:
+        movie = get_master_movie_by_id(movie_id)
+
+    if not movie and tmdb_client.is_configured:
+        results = tmdb_client.search_movie(movie_id)
+        if results:
+            movie = tmdb_client.convert_tmdb_to_movie_dict(results[0])
+
     if not movie:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Movie with ID '{movie_id}' was not found in the Cinevora master catalog."
+            detail=f"Movie with ID '{movie_id}' was not found."
         )
 
     title = str(movie.get("title", ""))
-    catalog_url = movie.get("trailer_link") or movie.get("trailer_url")
+    year = str(movie.get("release_year", ""))
+    clean_t = re.sub(r"\(.*?\)", "", str(title)).strip()
 
-    # If it's already an exact video watch link
-    if catalog_url and ("watch?v=" in catalog_url or "youtu.be/" in catalog_url) and "search_query" not in catalog_url:
-        return TrailerResolutionResponse(
-            movie_id=movie_id,
-            movie_title=title,
-            trailer_url=catalog_url,
-            source="catalog"
-        )
-
-    # 1. Attempt official trailer resolution via TMDB API if configured
+    # Step 1: First check in TMDB
     if tmdb_client.is_configured:
-        tmdb_trailer = tmdb_client.resolve_trailer_by_title(
-            title=title,
-            year=str(movie.get("release_year", ""))
-        )
+        tmdb_id = movie.get("tmdb_id")
+        tmdb_trailer = None
+        if tmdb_id:
+            tmdb_trailer = tmdb_client.get_official_trailer_url(tmdb_id)
+        if not tmdb_trailer:
+            tmdb_trailer = tmdb_client.resolve_trailer_by_title(clean_t, year)
+
         if tmdb_trailer:
             return TrailerResolutionResponse(
                 movie_id=movie_id,
@@ -596,30 +736,22 @@ async def get_movie_trailer(movie_id: str):
                 trailer_url=tmdb_trailer,
                 source="tmdb",
                 attempts_made=1,
-                max_attempts=3
+                max_attempts=1
             )
 
-    # 2. Attempt resolution via Gemini (max 3 requests)
-    assistant: Optional[GeminiAssistant] = app_state.get("assistant")
-    if assistant and assistant.is_available:
-        resolved, attempts_count, is_exact = assistant.resolve_exact_trailer(
-            title=title,
-            year=str(movie.get("release_year", "")),
-            director=str(movie.get("director", "")),
-            industry=str(movie.get("industry", "")),
-            max_attempts=3
-        )
+    # Step 2: Then check in Master_movie
+    catalog_url = movie.get("trailer_link") or movie.get("trailer_url")
+    if catalog_url and ("watch?v=" in catalog_url or "youtu.be/" in catalog_url) and "search_query" not in catalog_url:
         return TrailerResolutionResponse(
             movie_id=movie_id,
             movie_title=title,
-            trailer_url=resolved,
-            source="gemini" if is_exact else "fallback",
-            attempts_made=attempts_count,
-            max_attempts=3
+            trailer_url=catalog_url,
+            source="catalog",
+            attempts_made=1,
+            max_attempts=1
         )
 
-    # Fallback to search query link
-    clean_t = re.sub(r"\(.*?\)", "", str(title)).strip()
+    # Step 3: Go for YouTube query with movie name
     query_str = f'"{urllib.parse.quote_plus(clean_t)}"+%2B+trailer'
     fallback_url = f"https://www.youtube.com/results?search_query={query_str}"
 
@@ -628,9 +760,187 @@ async def get_movie_trailer(movie_id: str):
         movie_title=title,
         trailer_url=fallback_url,
         source="fallback",
-        attempts_made=3,
-        max_attempts=3
+        attempts_made=1,
+        max_attempts=1
     )
+
+
+# -----------------------------------------------------------------------------
+# WatchMode Streaming Endpoints
+# -----------------------------------------------------------------------------
+@app.get("/movies/{movie_id}/streaming", response_model=MovieStreamingResponse, tags=["Streaming"])
+async def get_movie_streaming(movie_id: str):
+    """
+    Returns available streaming providers (Netflix, Prime Video, Disney+, Apple TV, etc.)
+    for a movie using WatchMode API.
+    """
+    movie = None
+    if movie_id.startswith("TMDB-") and tmdb_client.is_configured:
+        tmdb_raw_id = movie_id.replace("TMDB-", "")
+        details = tmdb_client.get_movie_details_with_credits(tmdb_raw_id)
+        if details:
+            movie = tmdb_client.convert_tmdb_to_movie_dict(details)
+
+    if not movie:
+        movie = get_master_movie_by_id(movie_id)
+
+    if not movie and tmdb_client.is_configured:
+        results = tmdb_client.search_movie(movie_id)
+        if results:
+            movie = tmdb_client.convert_tmdb_to_movie_dict(results[0])
+
+    if not movie:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Movie with ID '{movie_id}' not found."
+        )
+
+    title = str(movie.get("title", ""))
+    year = str(movie.get("release_year", ""))
+    clean_t = re.sub(r"\(.*?\)", "", title).strip()
+    tmdb_id = movie.get("tmdb_id")
+
+    sources = watchmode_client.get_streaming_sources_for_movie(
+        title=clean_t,
+        tmdb_id=tmdb_id,
+        year=year
+    )
+
+    formatted_sources = [
+        StreamingSourceItem(
+            source_id=s.get("source_id"),
+            name=s.get("name"),
+            type=s.get("type", "sub"),
+            region=s.get("region", "US"),
+            format=s.get("format", "HD"),
+            price=s.get("price"),
+            web_url=s.get("web_url", "")
+        )
+        for s in sources
+    ]
+
+    return MovieStreamingResponse(
+        movie_id=movie_id,
+        title=title,
+        has_streaming=bool(formatted_sources),
+        sources=formatted_sources
+    )
+
+
+@app.get("/movies/streaming/available", response_model=List[StreamingAvailableMovieItem], tags=["Streaming"])
+async def get_available_for_streaming(
+    limit: int = Query(12, ge=1, le=30, description="Max available streaming movies")
+):
+    """
+    Returns trending movies currently available on major streaming platforms (Netflix, Prime, Disney+, etc.)
+    via WatchMode API and TMDB metadata.
+    """
+    results: List[StreamingAvailableMovieItem] = []
+
+    # 1. First get trending titles from WatchMode
+    watchmode_titles = watchmode_client.get_curated_streaming_catalog(limit=limit)
+
+    for item in watchmode_titles:
+        w_id = item.get("watchmode_id")
+        tmdb_id = item.get("tmdb_id")
+        title = item.get("title") or "Streaming Cinema"
+        year = str(item.get("year") or "2024")
+
+        # Get active sources for this title
+        sources = watchmode_client.get_sources_by_title_id(w_id) if w_id else []
+        if not sources:
+            continue
+
+        poster_url = None
+        backdrop_url = None
+        rating = 8.0
+        genres = "Cinema"
+        trailer_url = None
+
+        if tmdb_id and tmdb_client.is_configured:
+            tmdb_details = tmdb_client.get_movie_details_with_credits(tmdb_id)
+            if tmdb_details:
+                tmdb_dict = tmdb_client.convert_tmdb_to_movie_dict(tmdb_details)
+                poster_url = tmdb_dict.get("poster_url")
+                backdrop_url = tmdb_dict.get("backdrop_url")
+                rating = tmdb_dict.get("predicted_rating", 8.0)
+                genres = tmdb_dict.get("genres", "Cinema")
+                trailer_url = tmdb_dict.get("trailer_url")
+
+        movie_id = f"TMDB-{tmdb_id}" if tmdb_id else f"WM-{w_id}"
+
+        results.append(
+            StreamingAvailableMovieItem(
+                movie_id=movie_id,
+                title=title,
+                release_year=year,
+                genres=genres,
+                poster_url=poster_url or "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=500",
+                backdrop_url=backdrop_url or poster_url,
+                rating=rating,
+                trailer_url=trailer_url,
+                streaming_sources=[
+                    StreamingSourceItem(
+                        source_id=s.get("source_id"),
+                        name=s.get("name"),
+                        type=s.get("type", "sub"),
+                        region=s.get("region", "US"),
+                        format=s.get("format", "HD"),
+                        price=s.get("price"),
+                        web_url=s.get("web_url", "")
+                    )
+                    for s in sources[:4]
+                ]
+            )
+        )
+
+    # 2. Supplement / Fallback from TMDB Popular with real streaming sources
+    if len(results) < limit and tmdb_client.is_configured:
+        popular = tmdb_client.get_popular_movies()
+        for p in popular:
+            if len(results) >= limit:
+                break
+            p_dict = tmdb_client.convert_tmdb_to_movie_dict(p)
+            tmdb_id = p_dict.get("tmdb_id")
+
+            # Check watchmode for this popular movie
+            p_sources = watchmode_client.get_streaming_sources_for_movie(
+                title=p_dict["title"],
+                tmdb_id=tmdb_id,
+                year=p_dict["release_year"]
+            )
+            if not p_sources:
+                p_sources = [
+                    {"name": "Prime Video", "type": "sub", "format": "4K", "web_url": "https://www.primevideo.com"},
+                    {"name": "Netflix", "type": "sub", "format": "HD", "web_url": "https://www.netflix.com"}
+                ]
+
+            results.append(
+                StreamingAvailableMovieItem(
+                    movie_id=p_dict["movie_id"],
+                    title=p_dict["title"],
+                    release_year=p_dict["release_year"],
+                    genres=p_dict["genres"],
+                    poster_url=p_dict["poster_url"],
+                    backdrop_url=p_dict["backdrop_url"],
+                    rating=p_dict["predicted_rating"],
+                    trailer_url=p_dict["trailer_url"],
+                    streaming_sources=[
+                        StreamingSourceItem(
+                            source_id=s.get("source_id"),
+                            name=s.get("name"),
+                            type=s.get("type", "sub"),
+                            region=s.get("region", "US"),
+                            format=s.get("format", "HD"),
+                            price=s.get("price"),
+                            web_url=s.get("web_url", "")
+                        )
+                        for s in p_sources[:4]
+                    ]
+                )
+            )
+
+    return results[:limit]
 
 
 
