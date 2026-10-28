@@ -22,6 +22,80 @@ type HomePageProps = {
   progressMap: Record<string, number>;
 };
 
+const initialStreamingMovies: StreamingMovie[] = [
+  {
+    movie_id: "CINEVORA-0001220",
+    title: "Interstellar",
+    release_year: "2014",
+    genres: "Sci-Fi, Adventure, Drama",
+    poster_url: "https://image.tmdb.org/t/p/w500/gEU2QniE6E77NI6lCU6MxlNBvIx.jpg",
+    backdrop_url: "https://image.tmdb.org/t/p/w1280/xJHokMbljvjADYdit5fK5VQsXEG.jpg",
+    rating: 8.7,
+    trailer_url: "https://www.youtube.com/watch?v=LY19rHKAaAg",
+    streaming_sources: [
+      { name: "Prime Video", type: "sub", format: "4K", web_url: "https://www.primevideo.com" },
+      { name: "Hotstar", type: "sub", format: "4K", web_url: "https://www.hotstar.com" },
+      { name: "Apple TV", type: "rent", format: "4K", web_url: "https://tv.apple.com" }
+    ]
+  },
+  {
+    movie_id: "CINEVORA-0000001",
+    title: "Inception",
+    release_year: "2010",
+    genres: "Action, Sci-Fi, Adventure",
+    poster_url: "https://image.tmdb.org/t/p/w500/oYuLEt3zVCKq57qu2F8dT7NIa6f.jpg",
+    backdrop_url: "https://image.tmdb.org/t/p/w1280/8ZTVqvKDQ8emSGUEMjsS4yHAwrp.jpg",
+    rating: 8.8,
+    trailer_url: "https://www.youtube.com/watch?v=JE9z-gy4De4",
+    streaming_sources: [
+      { name: "Netflix", type: "sub", format: "HD", web_url: "https://www.netflix.com" },
+      { name: "Prime Video", type: "sub", format: "HD", web_url: "https://www.primevideo.com" }
+    ]
+  },
+  {
+    movie_id: "CINEVORA-0000002",
+    title: "The Dark Knight",
+    release_year: "2008",
+    genres: "Action, Crime, Drama",
+    poster_url: "https://image.tmdb.org/t/p/w500/qJ2tW6WMUDux911r6m7haRef0WH.jpg",
+    backdrop_url: "https://image.tmdb.org/t/p/w1280/dqK9Hag1054tghRQSqLSfrkvQnA.jpg",
+    rating: 9.0,
+    trailer_url: "https://www.youtube.com/watch?v=EXeTwQWrcwY",
+    streaming_sources: [
+      { name: "Prime Video", type: "sub", format: "4K", web_url: "https://www.primevideo.com" },
+      { name: "Netflix", type: "sub", format: "HD", web_url: "https://www.netflix.com" }
+    ]
+  },
+  {
+    movie_id: "CINEVORA-0000003",
+    title: "Spider-Man: Across the Spider-Verse",
+    release_year: "2023",
+    genres: "Animation, Action, Adventure",
+    poster_url: "https://image.tmdb.org/t/p/w500/8Vt6mWEReuy4Of61Lnj5Xj704m8.jpg",
+    backdrop_url: "https://image.tmdb.org/t/p/w1280/4HodYYKEIsGOdinkGi2Ucz6X9i0.jpg",
+    rating: 8.6,
+    trailer_url: "https://www.youtube.com/watch?v=cqGjhVJWtEg",
+    streaming_sources: [
+      { name: "Netflix", type: "sub", format: "4K", web_url: "https://www.netflix.com" },
+      { name: "Prime Video", type: "rent", format: "4K", web_url: "https://www.primevideo.com" }
+    ]
+  },
+  {
+    movie_id: "CINEVORA-0000004",
+    title: "Dune: Part Two",
+    release_year: "2024",
+    genres: "Sci-Fi, Adventure",
+    poster_url: "https://image.tmdb.org/t/p/w500/1pdfLvkbY9ohJlCjQH2CZjjYVvJ.jpg",
+    backdrop_url: "https://image.tmdb.org/t/p/w1280/xOMo8BRK7PfcJv9JCnx7s520035.jpg",
+    rating: 8.5,
+    trailer_url: "https://www.youtube.com/watch?v=Way9Dexny3w",
+    streaming_sources: [
+      { name: "Prime Video", type: "sub", format: "4K", web_url: "https://www.primevideo.com" },
+      { name: "Apple TV", type: "rent", format: "4K", web_url: "https://tv.apple.com" }
+    ]
+  }
+];
+
 export const HomePage = ({ myList, onToggleList }: HomePageProps) => {
   useDocumentMeta(
     "Cinevora — Real-Time Movie Recommendation Service",
@@ -30,7 +104,7 @@ export const HomePage = ({ myList, onToggleList }: HomePageProps) => {
 
   const [featured, setFeatured] = useState<ContentItem[]>([]);
   const [recommended, setRecommended] = useState<ContentItem[]>(fallbackRecs);
-  const [streamingMovies, setStreamingMovies] = useState<StreamingMovie[]>([]);
+  const [streamingMovies, setStreamingMovies] = useState<StreamingMovie[]>(initialStreamingMovies);
   const [trending, setTrending] = useState<ContentItem[]>(trendingNow);
   const [indianCinema, setIndianCinema] = useState<ContentItem[]>(moviesCollection);
   const [hollywood, setHollywood] = useState<ContentItem[]>(trendingNow);
