@@ -313,19 +313,20 @@ class GeminiAssistant:
         director: Optional[str] = None,
         industry: Optional[str] = None,
         max_attempts: int = 3
-    ) -> str:
+    ) -> Tuple[str, int, bool]:
         """
         Uses Gemini to find the exact official YouTube trailer video URL.
         Makes up to 3 requests to Gemini.
+        Returns: (trailer_url, attempts_made, is_exact_match)
         If all 3 requests fail or no valid watch link is found, returns:
-        https://www.youtube.com/results?search_query={movie_name}+trailer
+        (https://www.youtube.com/results?search_query={movie_name}+trailer, 3, False)
         """
         clean_t = re.sub(r"\(.*?\)", "", str(title)).strip()
-        query_encoded = quote_plus(f"{clean_t} trailer")
+        query_encoded = f'"{quote_plus(clean_t)}"+%2B+trailer'
         fallback_search_url = f"https://www.youtube.com/results?search_query={query_encoded}"
 
         if not self.is_available or self._client is None:
-            return fallback_search_url
+            return fallback_search_url, 0, False
 
         details = f"Movie: '{clean_t}'"
         if year:
@@ -363,17 +364,17 @@ Provide ONLY the watch link in format: https://www.youtube.com/watch?v=VIDEO_ID"
                 m = re.search(r"https://www\.youtube\.com/watch\?v=([a-zA-Z0-9_-]{11})", raw)
                 if m:
                     logger.info("Found exact trailer for '%s' on attempt %d: %s", clean_t, attempt + 1, m.group(0))
-                    return m.group(0)
+                    return m.group(0), attempt + 1, True
                 m_short = re.search(r"https://youtu\.be/([a-zA-Z0-9_-]{11})", raw)
                 if m_short:
                     watch_url = f"https://www.youtube.com/watch?v={m_short.group(1)}"
                     logger.info("Found exact trailer for '%s' on attempt %d: %s", clean_t, attempt + 1, watch_url)
-                    return watch_url
+                    return watch_url, attempt + 1, True
             except Exception as e:
                 logger.warning("Gemini trailer request %d/%d failed for '%s': %s", attempt + 1, max_attempts, clean_t, e)
 
         logger.info("All %d Gemini requests failed for '%s'. Returning fallback search URL: %s", max_attempts, clean_t, fallback_search_url)
-        return fallback_search_url
+        return fallback_search_url, max_attempts, False
 
     def detect_genre_from_text(self, text: str) -> Optional[str]:
         """

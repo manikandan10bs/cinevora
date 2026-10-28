@@ -335,4 +335,6 @@ class TrailerResolutionResponse(BaseModel):
     movie_title: str
     trailer_url: Optional[str] = None
     source: str = "catalog"
+    attempts_made: int = 1
+    max_attempts: int = 3
 

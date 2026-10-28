@@ -56,7 +56,7 @@ def resolve_trailer_with_gemini(client, model_name, movie_name, year=None, direc
     https://www.youtube.com/results?search_query={movie_name}+trailer
     """
     clean_title = re.sub(r"\(.*?\)", "", str(movie_name)).strip()
-    fallback_url = "https://www.youtube.com/results?search_query=" + quote_plus(f"{clean_title} trailer")
+    fallback_url = f'https://www.youtube.com/results?search_query="{quote_plus(clean_title)}"+%2B+trailer'
 
     if client is None:
         return fallback_url, "fallback (no gemini client)"

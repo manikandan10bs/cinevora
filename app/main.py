@@ -581,35 +581,37 @@ async def get_movie_trailer(movie_id: str):
             source="catalog"
         )
 
-    # Attempt resolution via Gemini
+    # Attempt resolution via Gemini (max 3 requests)
     assistant: Optional[GeminiAssistant] = app_state.get("assistant")
     if assistant and assistant.is_available:
-        resolved = assistant.resolve_exact_trailer(
+        resolved, attempts_count, is_exact = assistant.resolve_exact_trailer(
             title=title,
             year=str(movie.get("release_year", "")),
             director=str(movie.get("director", "")),
-            industry=str(movie.get("industry", ""))
+            industry=str(movie.get("industry", "")),
+            max_attempts=3
         )
-        if resolved:
-            return TrailerResolutionResponse(
-                movie_id=movie_id,
-                movie_title=title,
-                trailer_url=resolved,
-                source="gemini"
-            )
+        return TrailerResolutionResponse(
+            movie_id=movie_id,
+            movie_title=title,
+            trailer_url=resolved,
+            source="gemini" if is_exact else "fallback",
+            attempts_made=attempts_count,
+            max_attempts=3
+        )
 
     # Fallback to search query link
-    if catalog_url and catalog_url.strip():
-        fallback_url = catalog_url
-    else:
-        query_str = urllib.parse.quote_plus(f"{title} trailer")
-        fallback_url = f"https://www.youtube.com/results?search_query={query_str}"
+    clean_t = re.sub(r"\(.*?\)", "", str(title)).strip()
+    query_str = f'"{urllib.parse.quote_plus(clean_t)}"+%2B+trailer'
+    fallback_url = f"https://www.youtube.com/results?search_query={query_str}"
 
     return TrailerResolutionResponse(
         movie_id=movie_id,
         movie_title=title,
         trailer_url=fallback_url,
-        source="fallback"
+        source="fallback",
+        attempts_made=3,
+        max_attempts=3
     )
 
 

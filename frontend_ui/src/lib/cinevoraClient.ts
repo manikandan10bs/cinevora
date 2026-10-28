@@ -54,7 +54,7 @@ export function getEffectiveTrailerUrl(movie: any, title?: string): string {
   const cleanTitle = (title || movie?.title || movie?.movie_title || "movie")
     .replace(/\s*\(\d{4}\)/, "")
     .trim();
-  return `https://www.youtube.com/results?search_query=${encodeURIComponent(cleanTitle + " trailer")}`;
+  return `https://www.youtube.com/results?search_query="${encodeURIComponent(cleanTitle)}"+%2B+trailer`;
 }
 
 /**
@@ -509,6 +509,8 @@ export const cinevoraApi = {
     movie_title: string;
     trailer_url: string;
     source: string;
+    attempts_made?: number;
+    max_attempts?: number;
   }> {
     const res = await fetch(`${API_BASE_URL}/movies/${encodeURIComponent(movieId)}/trailer`);
     if (!res.ok) {
