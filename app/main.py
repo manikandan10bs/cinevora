@@ -268,8 +268,17 @@ app.add_middleware(MonitoringMiddleware)
 # System Health & Status Endpoints
 # -----------------------------------------------------------------------------
 @app.get("/", tags=["System"])
-async def root():
-    """Welcome endpoint providing health status and interactive API documentation links."""
+async def root(request: Request):
+    """
+    Serves the Cinevora cinema frontend when accessed by a browser,
+    or JSON service status when queried via API client / curl.
+    """
+    frontend_index = settings.PROJECT_ROOT_PATH / "frontend_ui" / "dist" / "index.html"
+    accept = request.headers.get("accept", "")
+    if "text/html" in accept and frontend_index.exists():
+        from starlette.responses import FileResponse
+        return FileResponse(frontend_index)
+
     return {
         "service": "Cinevora API",
         "description": "Real-Time Movie Recommendation Service with Knowledge Graph RAG & MLOps Monitoring",
@@ -1030,6 +1039,34 @@ async def clear_monitoring_data_endpoint(payload: ClearDataRequest):
         "message": "All monitoring telemetry, likes, favorites, search history, and viewing history have been permanently cleared."
     }
 
+
+# -----------------------------------------------------------------------------
+# Frontend Static Files & SPA Fallback Route (when frontend_ui/dist exists)
+# -----------------------------------------------------------------------------
+frontend_dist = settings.PROJECT_ROOT_PATH / "frontend_ui" / "dist"
+if frontend_dist.exists() and (frontend_dist / "index.html").exists():
+    from starlette.staticfiles import StaticFiles
+    from starlette.responses import FileResponse
+
+    assets_dir = frontend_dist / "assets"
+    if assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="frontend_assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_spa_frontend(full_path: str):
+        api_prefixes = (
+            "api", "movies", "recommendations", "likes", "favorites",
+            "monitoring", "users", "chat", "health", "docs", "redoc", "openapi.json"
+        )
+        first_segment = full_path.split("/")[0] if full_path else ""
+        if first_segment in api_prefixes:
+            raise HTTPException(status_code=404, detail="API endpoint not found")
+
+        candidate = frontend_dist / full_path
+        if full_path and candidate.exists() and candidate.is_file():
+            return FileResponse(candidate)
+
+        return FileResponse(frontend_dist / "index.html")
 
 
 if __name__ == "__main__":

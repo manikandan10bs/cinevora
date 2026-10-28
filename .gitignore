@@ -15,7 +15,8 @@ dist/
 dist-ssr/
 .vercel/
 frontend_ui/node_modules/
-frontend_ui/dist/
+# frontend_ui/dist/ is tracked for unified Render single-service deployment
+!frontend_ui/dist/
 frontend_ui/.vercel/
 
 # Temporary, Backups & Reference folders
