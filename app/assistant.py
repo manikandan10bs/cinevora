@@ -7,6 +7,7 @@ Grounded exclusively in Cinevora's verified catalog and recommendation engine.
 import re
 import json
 import logging
+from urllib.parse import quote_plus
 from typing import Dict, List, Optional, Tuple, Any, Union
 
 from google import genai
@@ -310,16 +311,22 @@ class GeminiAssistant:
         title: str,
         year: Optional[str] = None,
         director: Optional[str] = None,
-        industry: Optional[str] = None
-    ) -> Optional[str]:
+        industry: Optional[str] = None,
+        max_attempts: int = 3
+    ) -> str:
         """
-        Uses Gemini to identify the exact official YouTube trailer video URL
-        (https://www.youtube.com/watch?v=VIDEO_ID) for a movie title.
+        Uses Gemini to find the exact official YouTube trailer video URL.
+        Makes up to 3 requests to Gemini.
+        If all 3 requests fail or no valid watch link is found, returns:
+        https://www.youtube.com/results?search_query={movie_name}+trailer
         """
-        if not self.is_available or self._client is None:
-            return None
-
         clean_t = re.sub(r"\(.*?\)", "", str(title)).strip()
+        query_encoded = quote_plus(f"{clean_t} trailer")
+        fallback_search_url = f"https://www.youtube.com/results?search_query={query_encoded}"
+
+        if not self.is_available or self._client is None:
+            return fallback_search_url
+
         details = f"Movie: '{clean_t}'"
         if year:
             details += f" ({year})"
@@ -328,30 +335,45 @@ class GeminiAssistant:
         if industry:
             details += f", Industry/Region: {industry}"
 
-        prompt = f"""Identify the exact official YouTube trailer video URL for this movie:
+        prompts = [
+            f"""Identify the exact official YouTube trailer video URL for this movie:
 {details}
 
 Respond with ONLY a JSON object:
 {{"title": "{clean_t}", "youtube_url": "https://www.youtube.com/watch?v=VIDEO_ID"}}
-The URL MUST be an exact YouTube video watch link (https://www.youtube.com/watch?v=...).
-"""
-        try:
-            resp = self._client.models.generate_content(
-                model=self.model_name,
-                contents=prompt,
-                config=types.GenerateContentConfig(temperature=0.1)
-            )
-            raw = (resp.text or "").strip()
-            # Match standard 11-char video ID
-            m = re.search(r"https://www\.youtube\.com/watch\?v=([a-zA-Z0-9_-]{11})", raw)
-            if m:
-                return m.group(0)
-            m_short = re.search(r"https://youtu\.be/([a-zA-Z0-9_-]{11})", raw)
-            if m_short:
-                return f"https://www.youtube.com/watch?v={m_short.group(1)}"
-        except Exception as e:
-            logger.warning("Error resolving exact trailer with Gemini for '%s': %s", title, e)
-        return None
+The URL MUST be an exact YouTube video watch link (https://www.youtube.com/watch?v=...).""",
+
+            f"""Find the exact YouTube video watch link for the official trailer of the movie '{clean_t}' ({year or ''}).
+Provide ONLY the watch link in format: https://www.youtube.com/watch?v=VIDEO_ID""",
+
+            f"""What is the official YouTube trailer watch link for '{clean_t}'? Return ONLY the link: https://www.youtube.com/watch?v=..."""
+        ]
+
+        for attempt in range(max_attempts):
+            try:
+                prompt = prompts[min(attempt, len(prompts) - 1)]
+                logger.info("Resolving trailer for '%s' with Gemini (Request %d/%d)...", clean_t, attempt + 1, max_attempts)
+                resp = self._client.models.generate_content(
+                    model=self.model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(temperature=0.1)
+                )
+                raw = (resp.text or "").strip()
+                # Match standard 11-char video ID
+                m = re.search(r"https://www\.youtube\.com/watch\?v=([a-zA-Z0-9_-]{11})", raw)
+                if m:
+                    logger.info("Found exact trailer for '%s' on attempt %d: %s", clean_t, attempt + 1, m.group(0))
+                    return m.group(0)
+                m_short = re.search(r"https://youtu\.be/([a-zA-Z0-9_-]{11})", raw)
+                if m_short:
+                    watch_url = f"https://www.youtube.com/watch?v={m_short.group(1)}"
+                    logger.info("Found exact trailer for '%s' on attempt %d: %s", clean_t, attempt + 1, watch_url)
+                    return watch_url
+            except Exception as e:
+                logger.warning("Gemini trailer request %d/%d failed for '%s': %s", attempt + 1, max_attempts, clean_t, e)
+
+        logger.info("All %d Gemini requests failed for '%s'. Returning fallback search URL: %s", max_attempts, clean_t, fallback_search_url)
+        return fallback_search_url
 
     def detect_genre_from_text(self, text: str) -> Optional[str]:
         """

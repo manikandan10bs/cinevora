@@ -18,14 +18,16 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from google import genai
 from google.genai import types
+from urllib.parse import quote_plus
 from app.config import settings
 
 CSV_PATH = PROJECT_ROOT / "data" / "processed" / "Movies_Master_Cleaned.csv"
 
 
-def enrich_batch(client, batch_movies):
+def enrich_batch(client, batch_movies, max_attempts=3):
     """
     Sends a batch of movies to Gemini to get exact YouTube trailer URLs.
+    Tries up to max_attempts (3 requests).
     """
     clean_batch = []
     for m in batch_movies:
@@ -49,25 +51,29 @@ Return ONLY a valid JSON array of objects matching this exact format:
 ]
 """
 
-    try:
-        resp = client.models.generate_content(
-            model=settings.GEMINI_MODEL,
-            contents=prompt,
-            config=types.GenerateContentConfig(temperature=0.1)
-        )
-        raw = (resp.text or "").strip()
-        m = re.search(r"\[.*\]", raw, re.DOTALL)
-        if m:
-            results = json.loads(m.group(0))
-            return {
-                item["catalog_id"]: item.get("youtube_url")
-                for item in results
-                if item.get("youtube_url") and "watch?v=" in item["youtube_url"]
-            }
-        else:
-            print(f"Warning: Could not parse JSON from response: {raw[:200]}")
-    except Exception as e:
-        print(f"Error calling Gemini for batch: {e}")
+    for attempt in range(max_attempts):
+        try:
+            resp = client.models.generate_content(
+                model=settings.GEMINI_MODEL,
+                contents=prompt,
+                config=types.GenerateContentConfig(temperature=0.1)
+            )
+            raw = (resp.text or "").strip()
+            m = re.search(r"\[.*\]", raw, re.DOTALL)
+            if m:
+                results = json.loads(m.group(0))
+                matched = {
+                    item["catalog_id"]: item.get("youtube_url")
+                    for item in results
+                    if item.get("youtube_url") and ("watch?v=" in item["youtube_url"] or "youtu.be/" in item["youtube_url"])
+                }
+                if matched:
+                    return matched
+            print(f"  [Batch Attempt {attempt + 1}/{max_attempts}] Could not parse exact URLs, retrying...")
+        except Exception as e:
+            print(f"  [Batch Attempt {attempt + 1}/{max_attempts}] Error calling Gemini: {e}")
+            time.sleep(0.5)
+
     return {}
 
 
@@ -119,25 +125,35 @@ def main():
         batch_indices.append(idx)
 
         if len(batch) >= args.batch_size:
-            trailer_map = enrich_batch(client, batch)
+            trailer_map = enrich_batch(client, batch, max_attempts=3)
             for b_idx, m_info in zip(batch_indices, batch):
                 cid = m_info["catalog_id"]
                 if cid in trailer_map:
                     df.at[b_idx, "trailer_link"] = trailer_map[cid]
                     updated_count += 1
                     print(f"  [OK] {m_info['title']} -> {trailer_map[cid]}")
+                else:
+                    clean_title = re.sub(r"\(.*?\)", "", str(m_info["title"])).strip()
+                    fallback_url = "https://www.youtube.com/results?search_query=" + quote_plus(f"{clean_title} trailer")
+                    df.at[b_idx, "trailer_link"] = fallback_url
+                    print(f"  [Fallback after 3 requests] {m_info['title']} -> {fallback_url}")
             batch = []
             batch_indices = []
             time.sleep(1.0)  # Gentle rate limiting
 
     if batch:
-        trailer_map = enrich_batch(client, batch)
+        trailer_map = enrich_batch(client, batch, max_attempts=3)
         for b_idx, m_info in zip(batch_indices, batch):
             cid = m_info["catalog_id"]
             if cid in trailer_map:
                 df.at[b_idx, "trailer_link"] = trailer_map[cid]
                 updated_count += 1
                 print(f"  [OK] {m_info['title']} -> {trailer_map[cid]}")
+            else:
+                clean_title = re.sub(r"\(.*?\)", "", str(m_info["title"])).strip()
+                fallback_url = "https://www.youtube.com/results?search_query=" + quote_plus(f"{clean_title} trailer")
+                df.at[b_idx, "trailer_link"] = fallback_url
+                print(f"  [Fallback after 3 requests] {m_info['title']} -> {fallback_url}")
 
     print(f"\nSuccessfully enriched {updated_count}/{limit} movies with exact YouTube trailers!")
 
