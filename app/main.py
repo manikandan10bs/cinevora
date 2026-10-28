@@ -63,6 +63,7 @@ from app.schemas import (
     TrailerResolutionResponse
 )
 from app.assistant import GeminiAssistant
+from app.tmdb import tmdb_client
 from app.db import (
     init_db,
     add_favorite,
@@ -306,6 +307,7 @@ async def health_check():
         model_loaded=rec is not None,
         catalog_movies_count=master_count,
         gemini_configured=assistant.is_available if assistant else False,
+        tmdb_configured=tmdb_client.is_configured,
         enriched_catalog_count=master_count,
         master_catalog_count=master_count
     )
@@ -581,7 +583,23 @@ async def get_movie_trailer(movie_id: str):
             source="catalog"
         )
 
-    # Attempt resolution via Gemini (max 3 requests)
+    # 1. Attempt official trailer resolution via TMDB API if configured
+    if tmdb_client.is_configured:
+        tmdb_trailer = tmdb_client.resolve_trailer_by_title(
+            title=title,
+            year=str(movie.get("release_year", ""))
+        )
+        if tmdb_trailer:
+            return TrailerResolutionResponse(
+                movie_id=movie_id,
+                movie_title=title,
+                trailer_url=tmdb_trailer,
+                source="tmdb",
+                attempts_made=1,
+                max_attempts=3
+            )
+
+    # 2. Attempt resolution via Gemini (max 3 requests)
     assistant: Optional[GeminiAssistant] = app_state.get("assistant")
     if assistant and assistant.is_available:
         resolved, attempts_count, is_exact = assistant.resolve_exact_trailer(

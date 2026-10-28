@@ -118,6 +118,7 @@ class HealthResponse(BaseModel):
     model_loaded: bool = Field(..., description="Whether recommender artifacts are loaded in memory")
     catalog_movies_count: int = Field(..., description="Number of movies in catalog")
     gemini_configured: bool = Field(..., description="Whether Gemini API key is configured")
+    tmdb_configured: bool = Field(False, description="Whether TMDB API key is configured")
     enriched_catalog_count: Optional[int] = Field(None, description="Count of combined Indian + Hollywood catalog")
     master_catalog_count: Optional[int] = Field(None, description="Count of titles in master cleaned dataset")
 

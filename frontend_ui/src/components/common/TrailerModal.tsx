@@ -150,6 +150,11 @@ export const TrailerModal = ({ open, title, movieId, trailerUrl, onClose }: Trai
                     <CircleNotch size={12} className="animate-spin" />
                     Searching ({attempt}/3)
                   </span>
+                ) : source === "tmdb" && embedUrl ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-cyan-500/20 px-2.5 py-0.5 text-[11px] font-semibold text-cyan-400 border border-cyan-500/30">
+                    <Sparkle size={12} weight="fill" />
+                    TMDB Verified Studio Trailer
+                  </span>
                 ) : source === "gemini" && embedUrl ? (
                   <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-400 border border-emerald-500/30">
                     <Sparkle size={12} weight="fill" />

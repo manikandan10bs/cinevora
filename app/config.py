@@ -35,6 +35,27 @@ class Settings:
     # Official cost-effective Flash model: 'gemini-3.5-flash-lite'
     GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
 
+    # TMDB (The Movie Database) Configuration
+    TMDB_BASE_URL: str = "https://api.themoviedb.org/3"
+    TMDB_IMAGE_BASE: str = "https://image.tmdb.org/t/p"
+
+    @classmethod
+    def get_tmdb_api_key(cls) -> Optional[str]:
+        """
+        Retrieves the TMDB API key from environment.
+        Returns None or empty string if not configured.
+        """
+        key = os.getenv("TMDB_API_KEY")
+        if key and key.strip():
+            return key.strip()
+        return None
+
+    @classmethod
+    def is_tmdb_configured(cls) -> bool:
+        """Checks if a valid TMDB API key is configured."""
+        key = cls.get_tmdb_api_key()
+        return bool(key and len(key) >= 16)
+
     @classmethod
     def get_gemini_api_key(cls) -> Optional[str]:
         """
