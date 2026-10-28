@@ -527,23 +527,47 @@ async def get_featured_movies_endpoint(
 ):
     """
     Returns curated featured spotlight movies for rotating hero banners.
-    TMDB is the PRIMARY dataset, falling back / supplementing with Master Catalog.
+    WatchMode API is the PRIMARY source because it carries verified trailer links and backdrops.
+    Falls back to TMDB trending / Master Catalog.
     """
     results: List[MovieItem] = []
-    seen_ids = set()
+    seen_titles = set()
 
-    # Step 1: TMDB Trending as Primary Dataset
-    if tmdb_client.is_configured:
+    # Step 1: WatchMode Featured Movies with verified trailer links
+    if watchmode_client.is_configured:
+        wm_movies = watchmode_client.get_hero_featured_movies(limit=limit)
+        for wm in wm_movies:
+            seen_titles.add(wm["title"].lower().strip())
+            results.append(
+                MovieItem(
+                    movie_id=wm["movie_id"],
+                    movie_title=wm["title"],
+                    release_date=wm["release_date"],
+                    genres=wm["genres"],
+                    score=wm["score"],
+                    predicted_rating=wm["predicted_rating"],
+                    cinema_region=wm["cinema_region"],
+                    original_language=wm["original_language"],
+                    poster_url=wm["poster_url"],
+                    backdrop_url=wm["backdrop_url"],
+                    trailer_url=wm["trailer_url"]
+                )
+            )
+
+    # Step 2: TMDB Trending as Secondary
+    if len(results) < limit and tmdb_client.is_configured:
         tmdb_trending = tmdb_client.get_trending_movies("week")
         for tm in tmdb_trending:
             if len(results) >= limit:
                 break
             tm_dict = tmdb_client.convert_tmdb_to_movie_dict(tm)
-            m_id = tm_dict["movie_id"]
-            seen_ids.add(m_id)
+            t_title = tm_dict["title"].lower().strip()
+            if t_title in seen_titles:
+                continue
+            seen_titles.add(t_title)
             results.append(
                 MovieItem(
-                    movie_id=m_id,
+                    movie_id=tm_dict["movie_id"],
                     movie_title=tm_dict["title"],
                     release_date=tm_dict["release_date"],
                     genres=tm_dict["genres"],
@@ -557,17 +581,17 @@ async def get_featured_movies_endpoint(
                 )
             )
 
-    # Step 2: Supplement / Fallback from Master Catalog
+    # Step 3: Master Catalog fallback
     if len(results) < limit:
         from frontend.poster_service import get_featured_movies
         featured = get_featured_movies()
         for row in featured:
             if len(results) >= limit:
                 break
-            cat_id = row.get("catalog_id") or str(row.get("movie_id", ""))
-            if cat_id in seen_ids:
+            t_title = str(row.get("title", "")).lower().strip()
+            if t_title in seen_titles:
                 continue
-            seen_ids.add(cat_id)
+            seen_titles.add(t_title)
 
             ind = str(row.get("industry", "Cinema"))
             is_hwd = ind.lower() == "hollywood"
@@ -579,7 +603,7 @@ async def get_featured_movies_endpoint(
 
             results.append(
                 MovieItem(
-                    movie_id=cat_id,
+                    movie_id=row.get("catalog_id") or str(row.get("movie_id", "")),
                     movie_title=str(row.get("title", "Untitled")),
                     release_date=str(row.get("release_year", "Unknown")),
                     genres=str(row.get("genre", "Cinema")),
@@ -720,7 +744,26 @@ async def get_movie_trailer(movie_id: str):
     year = str(movie.get("release_year", ""))
     clean_t = re.sub(r"\(.*?\)", "", str(title)).strip()
 
-    # Step 1: First check in TMDB
+    # Step 1: Check in WatchMode (official trailer)
+    if watchmode_client.is_configured:
+        wm_trailer = movie.get("trailer_url")
+        if not wm_trailer or "search_query" in wm_trailer:
+            wm_trailer = watchmode_client.get_trailer_by_title_or_id(
+                clean_t,
+                tmdb_id=movie.get("tmdb_id"),
+                year=year
+            )
+        if wm_trailer and ("watch?v=" in wm_trailer or "youtu.be/" in wm_trailer) and "search_query" not in wm_trailer:
+            return TrailerResolutionResponse(
+                movie_id=movie_id,
+                movie_title=title,
+                trailer_url=wm_trailer,
+                source="watchmode",
+                attempts_made=1,
+                max_attempts=1
+            )
+
+    # Step 2: Check in TMDB
     if tmdb_client.is_configured:
         tmdb_id = movie.get("tmdb_id")
         tmdb_trailer = None
@@ -739,20 +782,31 @@ async def get_movie_trailer(movie_id: str):
                 max_attempts=1
             )
 
-    # Step 2: Then check in Master_movie
-    catalog_url = movie.get("trailer_link") or movie.get("trailer_url")
-    if catalog_url and ("watch?v=" in catalog_url or "youtu.be/" in catalog_url) and "search_query" not in catalog_url:
-        return TrailerResolutionResponse(
-            movie_id=movie_id,
-            movie_title=title,
-            trailer_url=catalog_url,
-            source="catalog",
-            attempts_made=1,
-            max_attempts=1
-        )
+    # Step 3: Direct fallback to YouTube search query with movie_name + cast + year
+    # (Master_movies trailer search removed as requested)
+    cast_raw = str(movie.get("cast") or "")
+    if (not cast_raw or "ensemble" in cast_raw.lower()) and tmdb_client.is_configured:
+        tmdb_id = movie.get("tmdb_id")
+        if tmdb_id:
+            credits_data = tmdb_client.get_movie_details_with_credits(tmdb_id)
+            if credits_data and credits_data.get("credits", {}).get("cast"):
+                cast_names = [a.get("name") for a in credits_data["credits"]["cast"][:2] if a.get("name")]
+                cast_raw = ", ".join(cast_names)
 
-    # Step 3: Go for YouTube query with movie name
-    query_str = f'"{urllib.parse.quote_plus(clean_t)}"+%2B+trailer'
+    lead_actors = [c.strip() for c in cast_raw.split(",") if c.strip() and "ensemble" not in c.lower()]
+    lead_cast = " ".join(lead_actors[:2])
+
+    clean_y = re.search(r"\b(19\d\d|20\d\d)\b", str(year))
+    y_str = clean_y.group(1) if clean_y else ""
+
+    query_tokens = [clean_t]
+    if lead_cast:
+        query_tokens.append(lead_cast)
+    if y_str:
+        query_tokens.append(y_str)
+    query_tokens.append("trailer")
+
+    query_str = urllib.parse.quote_plus(" ".join(query_tokens))
     fallback_url = f"https://www.youtube.com/results?search_query={query_str}"
 
     return TrailerResolutionResponse(

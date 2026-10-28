@@ -24,7 +24,9 @@ class WatchmodeClient:
         # In-memory LRU cache to conserve 2500 credit quota
         self._sources_cache: Dict[str, List[Dict[str, Any]]] = {}
         self._id_cache: Dict[str, Optional[int]] = {}
+        self._details_cache: Dict[str, Dict[str, Any]] = {}
         self._streaming_catalog_cache: Optional[List[Dict[str, Any]]] = None
+        self._hero_movies_cache: Optional[List[Dict[str, Any]]] = None
 
     @property
     def is_configured(self) -> bool:
@@ -212,6 +214,94 @@ class WatchmodeClient:
 
         self._streaming_catalog_cache = results
         return results[:limit]
+
+    def get_title_details(self, watchmode_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Fetches full title details including poster, backdrop, plot, and official trailer.
+        """
+        if not self.is_configured:
+            return None
+        cache_key = f"details:{watchmode_id}"
+        if cache_key in self._details_cache:
+            return self._details_cache[cache_key]
+
+        data = self._get(f"title/{watchmode_id}/details/")
+        if data and isinstance(data, dict):
+            self._details_cache[cache_key] = data
+            return data
+        return None
+
+    def get_hero_featured_movies(self, limit: int = 8) -> List[Dict[str, Any]]:
+        """
+        Retrieves top trending titles from WatchMode with full details, backdrops,
+        and verified YouTube trailer links for Cinevora's Hero Banner.
+        """
+        if not self.is_configured:
+            return []
+
+        if self._hero_movies_cache is not None:
+            return self._hero_movies_cache[:limit]
+
+        titles = self.get_curated_streaming_catalog(limit=limit)
+        results = []
+
+        for t in titles:
+            w_id = t.get("watchmode_id")
+            if not w_id:
+                continue
+            details = self.get_title_details(w_id)
+            if not details:
+                continue
+
+            trailer_url = details.get("trailer")
+            poster = details.get("posterLarge") or details.get("poster")
+            backdrop = details.get("backdrop") or poster
+            genres = ", ".join(details.get("genre_names", ["Cinema"]))
+            lang = details.get("original_language", "en")
+
+            results.append({
+                "movie_id": f"WM-{w_id}",
+                "catalog_id": f"WM-{w_id}",
+                "movie_title": details.get("title") or t.get("title", "Featured Cinema"),
+                "title": details.get("title") or t.get("title", "Featured Cinema"),
+                "release_date": details.get("release_date") or str(details.get("year", "2026")),
+                "release_year": str(details.get("year", "2026")),
+                "genres": genres,
+                "score": 1.0,
+                "predicted_rating": float(details.get("user_rating") or 8.5),
+                "cinema_region": "Hollywood" if lang == "en" else "International",
+                "original_language": lang,
+                "poster_url": poster,
+                "backdrop_url": backdrop,
+                "trailer_url": trailer_url,
+                "trailer_link": trailer_url,
+                "synopsis": details.get("plot_overview") or "A celebrated cinema premiere on Cinevora.",
+                "dataset_source": "watchmode"
+            })
+
+        if results:
+            self._hero_movies_cache = results
+
+        return results[:limit]
+
+    def get_trailer_by_title_or_id(
+        self,
+        title: str,
+        tmdb_id: Optional[int | str] = None,
+        year: Optional[str] = None
+    ) -> Optional[str]:
+        """
+        Fetches the official trailer watch link from WatchMode.
+        """
+        if not self.is_configured:
+            return None
+        w_id = self.search_title_id(title, tmdb_id, year)
+        if not w_id:
+            return None
+        details = self.get_title_details(w_id)
+        if details and details.get("trailer"):
+            return details["trailer"]
+        return None
 
 
 # Global singleton instance

@@ -76,7 +76,20 @@ export function getEffectiveTrailerUrl(movie: any, title?: string): string {
   const cleanTitle = (title || movie?.title || movie?.movie_title || "movie")
     .replace(/\s*\(\d{4}\)/, "")
     .trim();
-  return `https://www.youtube.com/results?search_query="${encodeURIComponent(cleanTitle)}"+%2B+trailer`;
+  const castStr = movie?.cast || "";
+  const leadCast = typeof castStr === "string" ? castStr.split(/[,|]/)[0].trim() : "";
+  const year = movie?.release_year || movie?.year || movie?.release_date?.slice?.(0, 4) || "";
+
+  const parts = [cleanTitle];
+  if (leadCast && !leadCast.toLowerCase().includes("ensemble")) {
+    parts.push(leadCast);
+  }
+  if (year && String(year).match(/\b(19\d\d|20\d\d)\b/)) {
+    parts.push(String(year));
+  }
+  parts.push("trailer");
+
+  return `https://www.youtube.com/results?search_query=${encodeURIComponent(parts.join(" "))}`;
 }
 
 /**

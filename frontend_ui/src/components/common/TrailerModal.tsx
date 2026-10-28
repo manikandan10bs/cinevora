@@ -116,15 +116,15 @@ export const TrailerModal = ({ open, title, movieId, trailerUrl, onClose }: Trai
                     <CircleNotch size={12} className="animate-spin" />
                     Checking TMDB & Catalog
                   </span>
+                ) : source === "watchmode" && embedUrl ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-400 border border-emerald-500/30">
+                    <Sparkle size={12} weight="fill" />
+                    WatchMode Verified Trailer
+                  </span>
                 ) : source === "tmdb" && embedUrl ? (
                   <span className="inline-flex items-center gap-1 rounded-full bg-cyan-500/20 px-2.5 py-0.5 text-[11px] font-semibold text-cyan-400 border border-cyan-500/30">
                     <Sparkle size={12} weight="fill" />
                     TMDB Verified Studio Trailer
-                  </span>
-                ) : source === "catalog" && embedUrl ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-400 border border-emerald-500/30">
-                    <FilmStrip size={12} weight="fill" />
-                    Master Catalog Trailer
                   </span>
                 ) : isSearchQuery ? (
                   <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2.5 py-0.5 text-[11px] font-semibold text-amber-400 border border-amber-500/30">
@@ -149,7 +149,7 @@ export const TrailerModal = ({ open, title, movieId, trailerUrl, onClose }: Trai
                 <div className="flex flex-col items-center justify-center gap-3 p-8 text-center">
                   <CircleNotch size={48} className="animate-spin text-primary" />
                   <p className="text-base font-medium text-foreground">
-                    Locating official trailer from TMDB & Master Catalog...
+                    Locating official trailer from WatchMode & TMDB...
                   </p>
                   <p className="text-xs text-muted-foreground">
                     Verifying official studio releases
